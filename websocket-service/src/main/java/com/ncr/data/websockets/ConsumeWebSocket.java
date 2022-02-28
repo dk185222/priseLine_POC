@@ -11,6 +11,7 @@ package com.ncr.data.websockets;
 import static java.nio.charset.StandardCharsets.UTF_8;
 
 import java.io.IOException;
+import java.util.Date;
 
 import javax.annotation.PostConstruct;
 
@@ -31,9 +32,11 @@ import com.mongodb.MongoClientURI;
 import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoDatabase;
 import com.mongodb.client.model.Filters;
+import com.mongodb.client.model.Updates;
 import com.ncr.data.model.Order;
 import com.ncr.data.model.OrderResponseModel;
 import com.ncr.data.util.NcrApiCall;
+import com.ncr.data.util.NisUtill;
 import com.neovisionaries.ws.client.WebSocket;
 import com.neovisionaries.ws.client.WebSocketAdapter;
 import com.neovisionaries.ws.client.WebSocketException;
@@ -91,7 +94,6 @@ public class ConsumeWebSocket {
 			@Override
 			public void onTextMessage(WebSocket websocket, String message) {
 				if (message != null) {
-					System.out.println(message);
 					var returVal = updateOrder(message);
 					if (returVal != null) {
 						postToHiveQueue(returVal);
@@ -120,6 +122,7 @@ public class ConsumeWebSocket {
 				String orderId = JsonPath.read(data, "$.message.map.attributes[0].value");
 				orderId = orderId.split("/")[1];
 
+				String timeResived = NisUtill.getGmtDateFormatISO(new Date());
 				final MongoClient mongoClient = new MongoClient(new MongoClientURI("mongodb://localhost:27017"));
 				final MongoDatabase database = mongoClient.getDatabase("hiveDb");
 				MongoCollection collection = database.getCollection("order_details");
@@ -127,8 +130,12 @@ public class ConsumeWebSocket {
 				Document o = (Document) collection
 						.find(Filters.and(Filters.eq("status", "OrderPlaced"), Filters.eq("orderId", orderId))).first();
 
-				collection.updateOne(new Document("_id", o.get("_id")),
-						new Document("$set", new Document("status", "completed")));
+				String postHive = NisUtill.getGmtDateFormatISO(new Date());
+
+				collection.updateMany(Filters.eq("_id", o.get("_id")),
+						Updates.combine(Updates.set("status", "completed"),
+								Updates.set("timeOrderResivedFromBsl", timeResived),
+								Updates.set("timeOrderPosteToHive", postHive)));
 
 				return Order.builder().mobileDeviceId(o.get("mobileDeviceId").toString()).orderId(orderId)
 						.status("completed").otherDetails(data).build();

@@ -8,6 +8,7 @@
  */
 package com.ncr.data.rest;
 
+import java.util.Date;
 import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -29,6 +30,7 @@ import com.ncr.data.model.Order;
 import com.ncr.data.model.OrderResponseModel;
 import com.ncr.data.repo.OrderRepo;
 import com.ncr.data.util.NcrApiCall;
+import com.ncr.data.util.NisUtill;
 
 /**
  * IdentityServiceRest.java
@@ -53,6 +55,7 @@ public class OrderServices {
 		final ObjectNode node = new ObjectMapper().readValue(resData, ObjectNode.class);
 		order.setOrderId(node.get("id").asText());
 		order.setStatus("OrderPlaced");
+		order.setTimeOrderPosteToBsl(NisUtill.getGmtDateFormatISO(new Date()));
 		orderRepo.save(order);
 		return new ResponseEntity<>(OrderResponseModel.builder().mobileDeviceId(order.getMobileDeviceId())
 				.orderId(node.get("id").asText()).build(), HttpStatus.OK);

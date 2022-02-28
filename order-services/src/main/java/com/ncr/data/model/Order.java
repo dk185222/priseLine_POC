@@ -37,4 +37,10 @@ public class Order {
 
 	private String status;
 
+	private String timeOrderPosteToBsl;
+
+	private String timeOrderResivedFromBsl;
+
+	private String timeOrderPosteToHive;
+
 }

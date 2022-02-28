@@ -1,0 +1,18 @@
+# SERVER
+server:
+  port: 9533
+  servlet:
+    context-path: /mpos-service
+   
+spring:
+ data:
+  mongodb:
+   uri: mongodb://localhost:27017/hiveDb   
+ 
+
+ncr:
+ keys:
+  sharedKey: 8620cd864ec44ccdbc5aa1924345545e
+  secretKey: ae0dbf406b9141779b32b41b7360cef8
+  organization: sr185246  
+  nepEnterpriseUnit: 91426f4986084490af3e52981b1000fd 

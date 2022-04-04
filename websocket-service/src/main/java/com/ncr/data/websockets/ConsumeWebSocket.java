@@ -18,6 +18,7 @@ import javax.annotation.PostConstruct;
 import org.bson.Document;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpMethod;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -49,17 +50,8 @@ import com.neovisionaries.ws.client.WebSocketFactory;
 @Component
 public class ConsumeWebSocket {
 
-	private static String host = "153.78.56.201";
-
-	private static String username = "test";
-
-	private static String password = "password";
-
-	private static Integer port = 8000;
-
-	private static String mainTopic = "pricelineordertopic/";
-
-	private static String serverPath = "mqtt";
+	@Autowired
+	private ProcessMessage processMessage;
 
 	@Autowired
 	private NcrApiCall ncrApiCall;
@@ -96,11 +88,9 @@ public class ConsumeWebSocket {
 			public void onTextMessage(WebSocket websocket, String message) {
 				System.out.println("message: " + message);
 				if (message != null) {
-					var returVal = updateOrder(message);
-					if (returVal != null) {
-						postToHiveQueue(returVal);
-					}
+					processMessage.asyncUpdate(message);
 				}
+				System.out.println("message: ");
 			}
 
 		}).addExtension(WebSocketExtension.PERMESSAGE_DEFLATE).connect();
@@ -113,71 +103,6 @@ public class ConsumeWebSocket {
 				ObjectNode.class);
 		return node.get("token").asText();
 
-	}
-
-	private Order updateOrder(String data) {
-		try {
-
-			String orderStaus = JsonPath.read(data, "$.message.attributes[4].value");
-
-			if (orderStaus != null
-					&& ("CANCELED".equalsIgnoreCase(orderStaus) || "FINISHED".equalsIgnoreCase(orderStaus))) {
-				String orderId = JsonPath.read(data, "$.message.attributes[0].value");
-				orderId = orderId.split("/")[1];
-
-				String timeResived = NisUtill.getGmtDateFormatISO(new Date());
-				final MongoClient mongoClient = new MongoClient(new MongoClientURI("mongodb://localhost:27017"));
-				final MongoDatabase database = mongoClient.getDatabase("hiveDb");
-				MongoCollection collection = database.getCollection("order_details");
-
-				Document o = (Document) collection
-						.find(Filters.and(Filters.eq("status", "OrderPlaced"), Filters.eq("orderId", orderId))).first();
-
-				String postHive = NisUtill.getGmtDateFormatISO(new Date());
-
-				collection.updateMany(Filters.eq("_id", o.get("_id")),
-						Updates.combine(Updates.set("status", "completed"),
-								Updates.set("timeOrderResivedFromBsl", timeResived),
-								Updates.set("timeOrderPosteToHive", postHive)));
-
-				return Order.builder().mobileDeviceId(o.get("mobileDeviceId").toString()).orderId(orderId)
-						.status("completed").otherDetails(data).build();
-			} else {
-				System.out.println("Skip record as the order is not CANCELED | FINISHED");
-			}
-		} catch (Exception exception) {
-			System.err.println( "Path does not exist in JSON : " + exception.getMessage());
-		}
-
-		return null;
-	}
-
-	private void postToHiveQueue(Order order) {
-		if (order != null) {
-			try {
-
-				final Mqtt5BlockingClient client = MqttClient.builder().useMqttVersion5().serverHost(host)
-						.serverPort(port).webSocketConfig().serverPath(serverPath).applyWebSocketConfig()
-						.buildBlocking();
-
-				var topic = mainTopic.concat(order.getMobileDeviceId());
-
-				client.connectWith().simpleAuth().username(username).password(UTF_8.encode(password)).applySimpleAuth()
-						.send();
-
-				client.subscribeWith().topicFilter(topic).qos(MqttQos.EXACTLY_ONCE).send();
-				OrderResponseModel o = OrderResponseModel.builder().mobileDeviceId(order.getMobileDeviceId())
-						.orderId(order.getOrderId()).otherDetails(order.getOtherDetails()).build();
-
-				ObjectMapper mapper = new ObjectMapper();
-				String json = mapper.writeValueAsString(o);
-
-				client.publishWith().topic(topic).payload(UTF_8.encode(json)).qos(MqttQos.EXACTLY_ONCE).send();
-
-			} catch (Exception exception) {
-				System.err.println(exception.getClass().getName() + ": " + exception.getMessage());
-			}
-		}
 	}
 
 }

@@ -90,9 +90,11 @@ public class ConsumeWebSocket {
 	 */
 	private WebSocket connect() throws IOException, WebSocketException {
 		final var token = this.getToken();
+		System.out.println("token : " + token);
 		return new WebSocketFactory().createSocket(SERVER.concat(token)).addListener(new WebSocketAdapter() {
 			@Override
 			public void onTextMessage(WebSocket websocket, String message) {
+				System.out.println("message: " + message);
 				if (message != null) {
 					var returVal = updateOrder(message);
 					if (returVal != null) {
@@ -115,11 +117,12 @@ public class ConsumeWebSocket {
 
 	private Order updateOrder(String data) {
 		try {
-			String orderStaus = JsonPath.read(data, "$.message.map.attributes[4].value");
+
+			String orderStaus = JsonPath.read(data, "$.message.attributes[4].value");
 
 			if (orderStaus != null
 					&& ("CANCELED".equalsIgnoreCase(orderStaus) || "FINISHED".equalsIgnoreCase(orderStaus))) {
-				String orderId = JsonPath.read(data, "$.message.map.attributes[0].value");
+				String orderId = JsonPath.read(data, "$.message.attributes[0].value");
 				orderId = orderId.split("/")[1];
 
 				String timeResived = NisUtill.getGmtDateFormatISO(new Date());
@@ -143,7 +146,7 @@ public class ConsumeWebSocket {
 				System.out.println("Skip record as the order is not CANCELED | FINISHED");
 			}
 		} catch (Exception exception) {
-			System.err.println(exception.getClass().getName() + ": " + exception.getMessage());
+			System.err.println( "Path does not exist in JSON : " + exception.getMessage());
 		}
 
 		return null;
